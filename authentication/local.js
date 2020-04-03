@@ -1,4 +1,4 @@
-module.exports = function(app, passport, provisioning) {
+module.exports = function(app, passport, provision) {
 
   const log = require('winston')
     , moment = require('moment')
@@ -9,7 +9,7 @@ module.exports = function(app, passport, provisioning) {
     , config = require('../config.js')
     , userTransformer = require('../transformers/user');
 
-  function parseLoginMetadata(req, res, next) {
+  function parseLoginMetadata(req, _res, next) {
     req.loginOptions = {
       userAgent: req.headers['user-agent'],
       appVersion: req.param('appVersion')
@@ -24,19 +24,6 @@ module.exports = function(app, passport, provisioning) {
     }
 
     next();
-  }
-
-  function authorizeDevice(req, res, next) {
-    provisioning.provision.check(provisioning.strategy, {uid: req.param('uid')}, function(err, device) {
-      if (err) return next(err);
-
-      if (provisioning.strategy === 'uid' && (!device || !device.registered)) {
-        return res.sendStatus(403);
-      } else {
-        req.device = device;
-        next();
-      }
-    })(req, res, next);
   }
 
   passport.use(new LocalStrategy(
@@ -60,7 +47,7 @@ module.exports = function(app, passport, provisioning) {
           return done(null, false, { message: 'Your account has been disabled, please contact a MAGE administrator for assistance.' });
         }
 
-        let security = user.authentication.security;
+        const security = user.authentication.security;
         if (security.locked && moment().isBefore(moment(security.lockedUntil))) {
           log.warn('Failed user login attempt: User ' + user.username + ' account is locked until ' + security.lockedUntil);
           return done(null, false, { message: 'Your account has been temporarily locked, please try again later or contact a MAGE administrator for assistance.' });
@@ -107,7 +94,7 @@ module.exports = function(app, passport, provisioning) {
         next();
       })(req, res, next);
     },
-    provisioning.provision.check(provisioning.strategy),
+    provision.check(),
     parseLoginMetadata,
     function(req, res) {
       new api.User().login(req.user,  req.provisionedDevice, req.loginOptions, function(err, token) {
@@ -175,7 +162,7 @@ module.exports = function(app, passport, provisioning) {
   app.post(
     '/auth/local/authorize',
     isAuthenticated,
-    authorizeDevice,
+    provision.check(),
     parseLoginMetadata,
     function(req, res, next) {
       new api.User().login(req.user,  req.provisionedDevice, req.loginOptions, function(err, token) {
@@ -185,7 +172,7 @@ module.exports = function(app, passport, provisioning) {
           token: token.token,
           expirationDate: token.expirationDate,
           user: userTransformer.transform(req.user, {path: req.getRoot()}),
-          device: req.device,
+          device: req.provisionedDevice,
           api: config.api
         });
       });
