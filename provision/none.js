@@ -1,4 +1,5 @@
-const log = require('winston');
+const log = require('winston')
+  , Device = require('../models/device');
 
 module.exports = function(provision) {
 
